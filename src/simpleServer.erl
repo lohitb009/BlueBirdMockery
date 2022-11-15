@@ -8,6 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(simpleServer).
 -author("lohit").
+-record(userActor, {uid, actorId}).
 -record(users, {uid, pwd}).
 -record(follow, {uid, list}).
 
@@ -29,6 +30,7 @@ main_loop() ->
     {ok, Message} ->
       io:format("Message is ~p ~n ", [Message]);
 
+  %% register the user
     {register, UserId, Password, ActorPid} ->
       %% Register the users
       io:format("Registering the user ~n "),
@@ -43,6 +45,7 @@ main_loop() ->
           ActorPid ! {ok, "UserId_exist"}
       end;
 
+  %% user login
     {login, UserId, Password, ActorPid} ->
       %% Login the users
       case chkPassword(UserId, Password) of
@@ -52,20 +55,28 @@ main_loop() ->
 
         {atomic, "True"} ->
           io:format("UserId ~p logged in ~n", [UserId]),
+          upsert_userActor(UserId, ActorPid), %% UserId-ActorId entry
           ActorPid ! {ok, "Logged In Successfully"}
       end;
 
-    %% Add the followers to the list
-    {follow, UserId, ToFollowId, ActorPid} ->
+  %% Add the followers to the list
+    {follow, UserId, ToFollowId} ->
       %% Follow the users
       addFollow(UserId, ToFollowId),
       ok;
 
-    %% get the followers for the user-id
+  %% get the followers for the user-id
     {getFollow, UserId, ActorPid} ->
       %% get the follow list here
       FollowList = getFollow(UserId),
-      ActorPid ! {followList, FollowList}
+      io:format("Follow-list is ~p ~n", [FollowList]),
+      ActorPid ! {followList, FollowList};
+
+  %% get the ActorId
+    {getActorId, FollowUserId, ActorPid} ->
+      %% get the FollowUserId's ActorId
+      FollowActorId = getFollowActorId(FollowUserId),
+      ActorPid ! {followActorId, FollowActorId}
   end,
 
   main_loop().
@@ -74,8 +85,9 @@ main_loop() ->
 initializeObjectStore() ->
   mnesia:create_schema([node()]),
   mnesia:start(),
+  mnesia:create_table(userActor, [{attributes, record_info(fields, userActor)}]),
   mnesia:create_table(users, [{attributes, record_info(fields, users)}]),
-  mnesia:create_table(follow, [{attributes, record_info(fields, users)}]).
+  mnesia:create_table(follow, [{attributes, record_info(fields, follow)}]).
 
 %%% chk if userId exists
 chkUserId(UserId) ->
@@ -153,6 +165,50 @@ addFollow(UserId, ToFollowId) ->
       UpEntry = mnesia:read(Uid),
       io:format("Updated Entry is ~p ~n", [UpEntry])
 
+    end,
+  mnesia:transaction(F).
+
+%% get followers list
+getFollow(UserId) ->
+  io:format("Inside the getFollow function ~n"),
+  %% get the follow-list
+  F =
+    fun() ->
+      Uid = {follow, UserId},
+      [{follow, _, List}] = mnesia:read(Uid),
+      List
+    end,
+  mnesia:transaction(F).
+
+%% upsert userActor list
+upsert_userActor(UserId, ActorId) ->
+
+  io:format("Upserting the pair in userActor list ~n"),
+  F =
+    fun() ->
+      Entry = #userActor{uid = UserId, actorId = ActorId},
+      mnesia:write(Entry)
+    end,
+  mnesia:transaction(F),
+
+  %% show the entry
+  F1 =
+    fun() ->
+      Uid = {userActor, UserId},
+      Entry = mnesia:read(Uid),
+      io:format("UserActor Entry is ~p ~n", [Entry])
+    end,
+  mnesia:transaction(F1).
+
+%% get Followers ActorId
+getFollowActorId(FollowUserId) ->
+  %% show the entry
+  F =
+    fun() ->
+      Uid = {userActor, FollowUserId},
+      [{userActor, _, FollowActorId}] = mnesia:read(Uid),
+      io:format("FollowActorId Entry is ~p ~n", [FollowActorId]),
+      FollowActorId
     end,
   mnesia:transaction(F).
 

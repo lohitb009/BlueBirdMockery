@@ -110,14 +110,12 @@ twitterWall(UserId) ->
     %% registerUser(UserId,Password);
 
     "Tweets" ->
-
       ok
-
   end.
 
 followUsers(UserId) ->
   io:format("Follow the users ~n"),
-  {ok, FollowId} = io:format("Enter the follow-Id: "),
+  {ok, FollowId} = io:read("Enter the follow-Id: "),
 
   case FollowId of
     "Done" ->
@@ -126,11 +124,36 @@ followUsers(UserId) ->
       {simpleServer, 'Server@127.0.0.1'} ! {getFollow, UserId, self()},
 
       receive
-        {followList, FollowList} ->
-          io:format("UserId ~p is following list is ~p ~n",[UserId,FollowList])
+        {followList, Result} ->
+          {atomic, FollowList} = Result,
+          io:format("UserId ~p following list is ~p ~n", [UserId, FollowList]),
+          %% go and starting chirping !!
+          chirpBird(FollowList)
       end;
 
     _ ->
-      {simpleServer, 'Server@127.0.0.1'} ! {follow, UserId, FollowId, self()},
+      {simpleServer, 'Server@127.0.0.1'} ! {follow, UserId, FollowId},
       followUsers(UserId)
   end.
+
+chirpBird(FollowList) ->
+  %% make a decision, if want to post a tweet or check the wall -- lb 15/11/2022
+  io:format("Start Chirping ~n"),
+  {ok, Message} = io:read("Write you thoughts here: ~n"),
+  %% Iterate the FollowList
+  iterateFollowList(Message, FollowList).
+
+iterateFollowList(_, []) ->
+  done;
+iterateFollowList(Message, FollowList) ->
+  [FollowUserId | Tail] = FollowList,
+  %% get the ActorId for the head
+  {simpleServer, 'Server@127.0.0.1'} ! {getActorId, FollowUserId, self()},
+  receive
+    {followActorId, FollowActorIdTuple} ->
+      {atomic,FollowActorId} = FollowActorIdTuple,
+      FollowActorId ! {tweet, Message}
+  end,
+  iterateFollowList(Message, Tail).
+
+

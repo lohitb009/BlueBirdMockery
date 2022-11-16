@@ -144,25 +144,26 @@ chkPassword(UserId, Pwd) ->
   mnesia:transaction(F).
 
 %% follow the users
+%% 16-11-2022; Corrected the follow logic here.
 addFollow(UserId, ToFollowId) ->
   io:format("Inside addFollow list ~n"),
 
   %% get the follow-list
   F =
     fun() ->
-      Uid = {follow, UserId},
-      [{follow, _, List}] = mnesia:read(Uid),
+      Fid = {follow, ToFollowId},
+      [{follow, _, List}] = mnesia:read(Fid),
 
       %% add ToFollowId to the list
-      NewList = [ToFollowId | List],
+      NewList = [UserId | List],
       io:format("New List is ~p ~n", [NewList]),
 
       %% update the entry
-      UpdateFollowEntry = #follow{uid = UserId, list = NewList},
+      UpdateFollowEntry = #follow{uid = ToFollowId, list = NewList},
       mnesia:write(UpdateFollowEntry),
 
       %% perform the check
-      UpEntry = mnesia:read(Uid),
+      UpEntry = mnesia:read(Fid),
       io:format("Updated Entry is ~p ~n", [UpEntry])
 
     end,

@@ -44,18 +44,6 @@ clientInput() ->
 
   end.
 
-%%client_loop() ->
-%%  receive
-%%  %% response --- register
-%%    {ok, "Registered"} ->
-%%      %% go to the login state
-%%      ok;
-%%
-%%    {ok, "UserId_exist"} ->
-%%      %% need to register again
-%%      ok
-%%  end.
-
 registerUser(UserId, Password) ->
   io:format("Entered UserId is ~p ~n", [UserId]),
   io:format("Entered Password is ~p ~n", [Password]),
@@ -104,14 +92,11 @@ twitterWall(UserId) ->
     "Follow" ->
       followUsers(UserId);
 
-    %% {simpleServer, 'Server@127.0.0.1'} ! {follow, UserId, "pqrs", self()}
-    %% {ok,UserId} = io:read("Enter UserId: "),
-    %% {ok,Password} = io:read("Enter Password: "),
-    %% registerUser(UserId,Password);
-
     "Tweets" ->
-      ok
-  end.
+      %% sendTweet(UserId)
+      insideTwitter(UserId)
+  end,
+  twitterWall(UserId).
 
 followUsers(UserId) ->
   io:format("Follow the users ~n"),
@@ -119,41 +104,41 @@ followUsers(UserId) ->
 
   case FollowId of
     "Done" ->
-
-      %% Display the follow list here
-      {simpleServer, 'Server@127.0.0.1'} ! {getFollow, UserId, self()},
-
-      receive
-        {followList, Result} ->
-          {atomic, FollowList} = Result,
-          io:format("UserId ~p following list is ~p ~n", [UserId, FollowList]),
-          %% go and starting chirping !!
-          chirpBird(FollowList)
-      end;
-
+      ok;
     _ ->
       {simpleServer, 'Server@127.0.0.1'} ! {follow, UserId, FollowId},
       followUsers(UserId)
   end.
 
-chirpBird(FollowList) ->
-  %% make a decision, if want to post a tweet or check the wall -- lb 15/11/2022
-  io:format("Start Chirping ~n"),
-  {ok, Message} = io:read("Write you thoughts here: ~n"),
-  %% Iterate the FollowList
-  iterateFollowList(Message, FollowList).
+%% Inside Twitter
+insideTwitter(UserId) ->
+  io:format("What do you want to-do? ~n"),
+  io:format("1. Feed ~n"),
+  io:format("2. Post ~n"),
+  {ok, Input} = io:read("Your Input: "),
+  io:format("You entered ~p ~n", [Input]),
+  case Input of
+    "Feed" ->
+      getFeed(UserId);
+    "Post" ->
+      sendTweet(UserId)
+  end.
 
-iterateFollowList(_, []) ->
-  done;
-iterateFollowList(Message, FollowList) ->
-  [FollowUserId | Tail] = FollowList,
-  %% get the ActorId for the head
-  {simpleServer, 'Server@127.0.0.1'} ! {getActorId, FollowUserId, self()},
+%% Send the tweet message
+sendTweet(UserId) ->
+  {ok, PostMessage} = io:read("Write your thoughts here: "),
+  {simpleServer, 'Server@127.0.0.1'} ! {userPost, UserId, PostMessage, self()},
   receive
-    {followActorId, FollowActorIdTuple} ->
-      {atomic,FollowActorId} = FollowActorIdTuple,
-      FollowActorId ! {tweet, Message}
-  end,
-  iterateFollowList(Message, Tail).
+    {post, "Posted"} ->
+      io:format("Message Posted ~n"),
+      io:format("Your post is :~p ~n", [PostMessage])
+  end.
 
-
+%% Get the Feed for the user
+getFeed(UserId) ->
+  {simpleServer, 'Server@127.0.0.1'} ! {getFeed, UserId, self()},
+  receive
+    {feed, Result} ->
+      {atomic,MessageBox} = Result,
+      io:format("The users message box is ~p ~n",[MessageBox])
+  end.

@@ -11,6 +11,7 @@
 -record(userActor, {uid, actorId}).
 -record(users, {uid, pwd}).
 -record(follow, {uid, list}).
+-record(twitterWall, {uid, followsPost}).
 
 %% API
 -export([start/0, init/0]).
@@ -76,9 +77,22 @@ main_loop() ->
     {getActorId, FollowUserId, ActorPid} ->
       %% get the FollowUserId's ActorId
       FollowActorId = getFollowActorId(FollowUserId),
-      ActorPid ! {followActorId, FollowActorId}
-  end,
+      ActorPid ! {followActorId, FollowActorId};
 
+  %% post from the user
+    {userPost, UserId, PostMessage, ActorPid} ->
+      %% get the User's followers list
+      {atomic, FollowersList} = getFollow(UserId),
+      %% on the basis of id add the message to the "twitterWall" of user
+      addTwitterWall(FollowersList, PostMessage),
+      ActorPid ! {post, "Posted"};
+
+  %% Get the feed for the user
+    {getFeed, UserId, ActorPid} ->
+      %% get the users message box
+      MessageBox = getMessageBox(UserId),
+      ActorPid ! {feed, MessageBox}
+  end,
   main_loop().
 
 %% Create mnesia schema
@@ -87,7 +101,8 @@ initializeObjectStore() ->
   mnesia:start(),
   mnesia:create_table(userActor, [{attributes, record_info(fields, userActor)}]),
   mnesia:create_table(users, [{attributes, record_info(fields, users)}]),
-  mnesia:create_table(follow, [{attributes, record_info(fields, follow)}]).
+  mnesia:create_table(follow, [{attributes, record_info(fields, follow)}]),
+  mnesia:create_table(twitterWall, [{attributes, record_info(fields, twitterWall)}]).
 
 %%% chk if userId exists
 chkUserId(UserId) ->
@@ -123,7 +138,15 @@ addPair(UserId, Pwd) ->
     fun() ->
       mnesia:write(FollowEntry)
     end,
-  mnesia:transaction(F1).
+  mnesia:transaction(F1),
+
+  %% Add user to the twitterWall
+  FollowPost = #twitterWall{uid = UserId, followsPost = []},
+  F2 =
+    fun() ->
+      mnesia:write(FollowPost)
+    end,
+  mnesia:transaction(F2).
 
 %%% chk for credentials
 chkPassword(UserId, Pwd) ->
@@ -213,3 +236,73 @@ getFollowActorId(FollowUserId) ->
     end,
   mnesia:transaction(F).
 
+%%% --- For SENDING the messages to the Followers of a User
+%% update the message in twitterWall
+upsertMessage(FollowerId,UpdatedMessageBox)->
+  F1 =
+    fun() ->
+      Entry = #twitterWall{uid = FollowerId, followsPost = UpdatedMessageBox},
+      mnesia:write(Entry),
+      Entry
+    end,
+  mnesia:transaction(F1).
+
+%% get the Followers Message Box
+getFollowersMessageBox(FollowerId)->
+  F =
+    fun() ->
+      Uid = {twitterWall, FollowerId},
+      Entry = mnesia:read(Uid),
+      Entry
+    end,
+  mnesia:transaction(F).
+
+%% chk for the message entry
+chkMessageEntry(FollowerId)->
+  F2 =
+    fun() ->
+      Uid = {twitterWall, FollowerId},
+      Entry = mnesia:read(Uid),
+      Entry
+    end,
+  mnesia:transaction(F2).
+
+%% add the message to the twitterWall of followers
+addTwitterWall([], _) ->
+  done;
+addTwitterWall(FollowersList, Message) ->
+  %% get the followerId
+  [FollowerId | Tail] = FollowersList,
+  io:format("Follower Id is ~p ~n", [FollowerId]),
+
+  %% get the MessageBox
+  Entry = getFollowersMessageBox(FollowerId),
+  io:format("Entry is ~p ~n",[Entry]),
+  {atomic,[{twitterWall,_,MessageBox}]} = Entry,
+  io:format("Message Box ~p ~n",[MessageBox]),
+
+  %% add the message to the MessageBox
+  UpdatedMessageBox = [Message] ++ MessageBox,
+  io:format("Updated Message-Box is ~p ~n", [UpdatedMessageBox]),
+
+  %% add the UpdatedMessageBox to the twitterWall
+  UpsertedMessage = upsertMessage(FollowerId,UpdatedMessageBox),
+  io:format("Upserted Message is  ~p ~n",[UpsertedMessage]),
+
+  %% chk for the message entry
+  Result = chkMessageEntry(FollowerId),
+  io:format("Feed Check is ~p ~n",[Result]),
+
+  %% recursively call the function for the rest
+  addTwitterWall(Tail, Message).
+
+%% get the users message-box
+getMessageBox(UserId) ->
+  F =
+    fun() ->
+      Uid = {twitterWall, UserId},
+      [{twitterWall, _, MessageBox}] = mnesia:read(Uid),
+      %% io:format("Message-Box is ~p ~n", [MessageBox]),
+      MessageBox
+    end,
+  mnesia:transaction(F).

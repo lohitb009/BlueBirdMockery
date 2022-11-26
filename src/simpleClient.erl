@@ -132,6 +132,8 @@ sendTweet(UserId) ->
     {post, "Posted"} ->
       io:format("Message Posted ~n"),
       io:format("Your post is :~p ~n", [PostMessage])
+  %% to-do, the message should go to the user if @User is used
+  %% this @User is assumed not to be a follower of the current user
   end.
 
 %% Get the Feed for the user
@@ -139,6 +141,40 @@ getFeed(UserId) ->
   {simpleServer, 'Server@127.0.0.1'} ! {getFeed, UserId, self()},
   receive
     {feed, Result} ->
-      {atomic,MessageBox} = Result,
-      io:format("The users message box is ~p ~n",[MessageBox])
+      {atomic, MessageBox} = Result,
+      io:format("The users message box is ~p ~n", [MessageBox]),
+
+      %% Print the feeds
+      RetweetBox = printFeeds(UserId, MessageBox, []),
+      io:format("Retweet Box is ~p ~n", [RetweetBox]),
+
+      case RetweetBox of
+        [] ->
+          ok;
+        _ ->
+          {simpleServer, 'Server@127.0.0.1'} ! {retweet, UserId, RetweetBox, self()},
+          receive
+            {retweet, "Done"} ->
+              ok
+          end
+      end,
+
+      %% Send the empty message box back to the server to reset the record entry
+      {simpleServer, 'Server@127.0.0.1'} ! {emptyBox, UserId}
+  end.
+
+printFeeds(_, [], RetweetBox) ->
+  RetweetBox;
+printFeeds(UserId, MessageBox, RetweetBox) ->
+  [Head | Tail] = MessageBox,
+  io:format("Feed is : ~p ~n", [Head]),
+
+  %%% chk for retweet case --- <TBD>
+  {ok, Response} = io:read("Do you want to retweet this message (Yes/No): "),
+  case Response of
+    "Yes" ->
+      UpdateRetweetBox = [Head | RetweetBox],
+      printFeeds(UserId, Tail, UpdateRetweetBox);
+    "No" ->
+      printFeeds(UserId, Tail, RetweetBox)
   end.

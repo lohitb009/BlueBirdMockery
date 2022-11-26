@@ -26,6 +26,8 @@ init() ->
   main_loop().
 
 main_loop() ->
+  io:format("Main Loop Listening Scope ~n ~n"),
+
   receive
 
     {ok, Message} ->
@@ -81,17 +83,60 @@ main_loop() ->
 
   %% post from the user
     {userPost, UserId, PostMessage, ActorPid} ->
+      %% chk if the message has @ annotation
+      Annotate = string:str(PostMessage, "@"),
+
+      case Annotate of
+        0 ->
+          ok;
+
+        _ ->
+          %% add the message to the non follower
+          %% userId is 3 character long, so get the userId -- support only 1 @annotation
+          SubString = string:substr(PostMessage, Annotate + 1, Annotate + 3),
+          io:format("Annotated SubStrng is ~p ~n", [SubString]),
+          AnnotateUserIdList = [SubString],
+          %% on the basis of id add the message to the "twitterWall" of user
+          addTwitterWall(AnnotateUserIdList, PostMessage),
+          ok
+      end,
+
       %% get the User's followers list
       {atomic, FollowersList} = getFollow(UserId),
-      %% on the basis of id add the message to the "twitterWall" of user
-      addTwitterWall(FollowersList, PostMessage),
+
+      case FollowersList of
+        [] ->
+          io:format("Nothing to post ~n");
+        _ ->
+          %% on the basis of id add the message to the "twitterWall" of user
+          addTwitterWall(FollowersList, PostMessage)
+      end,
       ActorPid ! {post, "Posted"};
+
+  %% Empty the message box
+    {emptyBox, UserId} ->
+      emptyMessageBox(UserId);
+
+  %% Retweet the message
+    {retweet, UserId, RetweetBox, ActorPid} ->
+      %% get the User's followers list
+      {atomic, FollowersList} = getFollow(UserId),
+
+      case FollowersList of
+        [] ->
+          io:format("Nothing to post ~n");
+        _ ->
+          %% on the basis of id add the message to the "twitterWall" of user
+          addTwitterWallRetweet(FollowersList, RetweetBox)
+      end,
+      ActorPid ! {retweet, "Done"};
 
   %% Get the feed for the user
     {getFeed, UserId, ActorPid} ->
       %% get the users message box
       MessageBox = getMessageBox(UserId),
       ActorPid ! {feed, MessageBox}
+
   end,
   main_loop().
 
@@ -238,7 +283,7 @@ getFollowActorId(FollowUserId) ->
 
 %%% --- For SENDING the messages to the Followers of a User
 %% update the message in twitterWall
-upsertMessage(FollowerId,UpdatedMessageBox)->
+upsertMessage(FollowerId, UpdatedMessageBox) ->
   F1 =
     fun() ->
       Entry = #twitterWall{uid = FollowerId, followsPost = UpdatedMessageBox},
@@ -248,7 +293,7 @@ upsertMessage(FollowerId,UpdatedMessageBox)->
   mnesia:transaction(F1).
 
 %% get the Followers Message Box
-getFollowersMessageBox(FollowerId)->
+getFollowersMessageBox(FollowerId) ->
   F =
     fun() ->
       Uid = {twitterWall, FollowerId},
@@ -258,7 +303,7 @@ getFollowersMessageBox(FollowerId)->
   mnesia:transaction(F).
 
 %% chk for the message entry
-chkMessageEntry(FollowerId)->
+chkMessageEntry(FollowerId) ->
   F2 =
     fun() ->
       Uid = {twitterWall, FollowerId},
@@ -277,24 +322,54 @@ addTwitterWall(FollowersList, Message) ->
 
   %% get the MessageBox
   Entry = getFollowersMessageBox(FollowerId),
-  io:format("Entry is ~p ~n",[Entry]),
-  {atomic,[{twitterWall,_,MessageBox}]} = Entry,
-  io:format("Message Box ~p ~n",[MessageBox]),
+  io:format("Entry is ~p ~n", [Entry]),
+  {atomic, [{twitterWall, _, MessageBox}]} = Entry,
+  io:format("Message Box ~p ~n", [MessageBox]),
 
   %% add the message to the MessageBox
   UpdatedMessageBox = [Message] ++ MessageBox,
   io:format("Updated Message-Box is ~p ~n", [UpdatedMessageBox]),
 
   %% add the UpdatedMessageBox to the twitterWall
-  UpsertedMessage = upsertMessage(FollowerId,UpdatedMessageBox),
-  io:format("Upserted Message is  ~p ~n",[UpsertedMessage]),
+  UpsertedMessage = upsertMessage(FollowerId, UpdatedMessageBox),
+  io:format("Upserted Message is  ~p ~n", [UpsertedMessage]),
 
   %% chk for the message entry
   Result = chkMessageEntry(FollowerId),
-  io:format("Feed Check is ~p ~n",[Result]),
+  io:format("Feed Check is ~p ~n", [Result]),
 
   %% recursively call the function for the rest
   addTwitterWall(Tail, Message).
+
+%% ---retweet--- add the message to the twitterWall of followers
+addTwitterWallRetweet([], _) ->
+  done;
+addTwitterWallRetweet(FollowersList, RetweetBox) ->
+  %% get the followerId
+  [FollowerId | Tail] = FollowersList,
+  io:format("Follower Id is ~p ~n", [FollowerId]),
+
+  %% get the MessageBox
+  Entry = getFollowersMessageBox(FollowerId),
+  io:format("Entry is ~p ~n", [Entry]),
+  {atomic, [{twitterWall, _, MessageBox}]} = Entry,
+  io:format("Message Box ~p ~n", [MessageBox]),
+
+  %% add the message to the MessageBox
+  UpdatedMessageBox = RetweetBox ++ MessageBox,
+  io:format("Updated Message-Box is ~p ~n", [UpdatedMessageBox]),
+
+  %% add the UpdatedMessageBox to the twitterWall
+  UpsertedMessage = upsertMessage(FollowerId, UpdatedMessageBox),
+  io:format("Upserted Message is  ~p ~n", [UpsertedMessage]),
+
+  %% chk for the message entry
+  Result = chkMessageEntry(FollowerId),
+  io:format("Feed Check is ~p ~n", [Result]),
+
+  %% recursively call the function for the rest
+  addTwitterWallRetweet(Tail, RetweetBox).
+
 
 %% get the users message-box
 getMessageBox(UserId) ->
@@ -306,3 +381,17 @@ getMessageBox(UserId) ->
       MessageBox
     end,
   mnesia:transaction(F).
+
+%% update the message-box i.e. empty the message box
+emptyMessageBox(UserId) ->
+  F1 =
+    fun() ->
+      UpdatedMessageBox = [],
+      Entry = #twitterWall{uid = UserId, followsPost = UpdatedMessageBox},
+      mnesia:write(Entry),
+      Entry
+    end,
+  mnesia:transaction(F1),
+  MessageBox = getMessageBox(UserId),
+  io:format("***Chk if the message box is empty now ~p ~n", [MessageBox]).
+

@@ -16,14 +16,14 @@ We can use multiple system as well, we just need to set cookie when we simulate 
 using command <br>
 ```erlang:set_cookie(<<cookie-name>>)```
 
-### Initialize a server
+## Initialize a server
 We have a single server node <br> 
 ```Server@127.0.0.1```
 ```
 
 ```
 
-### Initialize a client
+## Initialize a client
 Here we have simulated four client nodes <br>
 ```A. Client-abc@127.0.0.1```
 ```aidl
@@ -48,7 +48,7 @@ Here is the output on our server once the handshake is successfully established 
 server <br>
 ![Alt text](src/resultScreenshot/inputScreenshot.jpg?raw=true "Result")<br>
 
-### Register the clients
+## Register the clients
 Once server and client relationship is established between the client and server nodes,
 our first step will be to register client 
 
@@ -84,7 +84,7 @@ Output once our user ```vwx``` is successfully registered on the server<br>
 ![Alt text](src/resultScreenshot/inputScreenshot.jpg?raw=true "Result")
 <br>
 
-### Follow the user
+## Follow the user
 Here users ```pqr``` and client ```stu``` will follow user ```abc```.
 User ```vwx``` will not follow anyone right now
 
@@ -104,7 +104,7 @@ Output once our user ```stu``` is following user ```abc```<br>
 ![Alt text](src/resultScreenshot/inputScreenshot.jpg?raw=true "Result")
 <br>
 
-### Post a tweet
+## Post a tweet
 Here user ```abc``` will post a tweet, it will be visible to both user 
 ```pqr``` and user ```stu``` once they will check their tweet
 
@@ -132,7 +132,7 @@ This client will check the tweets available in the message-box.
 ![Alt text](src/resultScreenshot/inputScreenshot.jpg?raw=true "Result")
 <br>
 
-### Post Tweet to the user who is not following using @ annotation <br>
+## Post Tweet to the user who is not following using @ annotation <br>
 
 Our user-id is a three character user-id, so in order to post tweet to 
 non-following user, we need to use following annotation in our tweets ```@<<user-id>>```
@@ -149,7 +149,7 @@ This tweet will be available inside the message box of user ```abc```.
 The message will be available inside the message box of user ```abc``` <br>
 ![Alt text](src/resultScreenshot/inputScreenshot.jpg?raw=true "Result")
 
-### Retweet the tweet
+## Retweet the tweet
 Now user ```abc``` will retweet the message available inside it's message queue.
 This message will be added inside the message-box of user ```pqr``` 
 and user ```stu```, who are the followers of user ```abc```

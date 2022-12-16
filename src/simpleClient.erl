@@ -41,7 +41,6 @@ clientInput() ->
       {ok, UserId} = io:read("Enter UserId: "),
       {ok, Password} = io:read("Enter Password: "),
       loginUser(UserId, Password)
-
   end.
 
 registerUser(UserId, Password) ->
@@ -51,13 +50,25 @@ registerUser(UserId, Password) ->
   receive
     {ok, "Registered"} ->
       %% Do login
-      io:format("User is successfully registered ~n"),
+      %% io:format("User is successfully registered ~n"),
+
+      %% Print JSON Here
+      Json = <<"{\"response\": \"User is registered \"}">>,
+      io:format("~n"),
+      io:format([erlang:binary_to_list(Json)]),
+
       loginUser(UserId, Password);
 
     {ok, "UserId_exist"} ->
       io:format("User already exist ~n"),
       {ok, UserId} = io:read("Enter UserId: "),
       {ok, Password} = io:read("Enter Password: "),
+
+      %% Print JSON Here
+      Json = <<"{\"response\": \"UserId already exist \"}">>,
+      io:format("~n"),
+      io:format([erlang:binary_to_list(Json)]),
+
       registerUser(UserId, Password)
   end.
 
@@ -65,14 +76,28 @@ loginUser(UserId, Password) ->
   {simpleServer, 'Server@127.0.0.1'} ! {login, UserId, Password, self()},
   receive
     {ok, "Logged In Successfully"} ->
-      io:format("User Logged In Successfully~n"),
+      %% io:format("User Logged In Successfully~n"),
       %% go to twitter wall
+
+      %% Print JSON Here
+      Json = <<"{\"response\": \"logged-in successfully\"}">>,
+      io:format("~n"),
+      io:format([erlang:binary_to_list(Json)]),
+
       twitterWall(UserId);
 
     {ok, "Invalid Credentials"} ->
-      io:format("Invalid Credentials ~n"),
+
+      %% io:format("Invalid Credentials ~n"),
+
+      %% Print JSON Here
+      Json = <<"{\"response\": \"invalid credentials\"}">>,
+      io:format("~n"),
+      io:format([erlang:binary_to_list(Json)]),
+
       {ok, UserId} = io:read("Enter UserId: "),
       {ok, Password} = io:read("Enter Password: "),
+
       loginUser(UserId, Password)
   end.
 
@@ -107,7 +132,13 @@ followUsers(UserId) ->
       ok;
     _ ->
       {simpleServer, 'Server@127.0.0.1'} ! {follow, UserId, FollowId},
-      followUsers(UserId)
+      followUsers(UserId),
+
+      %% Print JSON Here
+      Json = <<"{\"response\": \"following user\"}">>,
+      io:format("~n"),
+      io:format([erlang:binary_to_list(Json)])
+
   end.
 
 %% Inside Twitter
@@ -130,8 +161,10 @@ sendTweet(UserId) ->
   {simpleServer, 'Server@127.0.0.1'} ! {userPost, UserId, PostMessage, self()},
   receive
     {post, "Posted"} ->
+
       io:format("Message Posted ~n"),
       io:format("Your post is :~p ~n", [PostMessage])
+
   %% to-do, the message should go to the user if @User is used
   %% this @User is assumed not to be a follower of the current user
   end.
